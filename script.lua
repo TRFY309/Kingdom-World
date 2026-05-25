@@ -1,14 +1,28 @@
 local O=loadstring(game:HttpGet("https://raw.githubusercontent.com/jensonhirst/Orion/main/source"))()
 local W=O:MakeWindow({Name="R On Top 🔥",HidePremium=false,SaveConfig=false})
 local T=W:MakeTab({Name="Car"})
+
 local RS=game:GetService("RunService")
 local UIS=game:GetService("UserInputService")
 local P=game.Players.LocalPlayer
 local lift,drift=false,false
 local roll=0
 local driftConnection
-local currentSpeed=0
-local maxSpeed=100
+
+-- سرعة ابتدائية
+local currentSpeed = 0
+local targetSpeed = 0
+local maxSpeed = 65 -- سرعة سيارة طبيعية
+local accel = 2.5   -- تسارع
+local deccel = 3    -- تباطؤ
+
+local function Clamp(x,mini,maxi)
+   return math.max(mini, math.min(x,maxi))
+end
+
+local function Lerp(a,b,t)
+   return a + (b - a) * Clamp(t, 0, 1)
+end
 
 local function GetCar()
 	local C=P.Character
@@ -50,52 +64,48 @@ T:AddToggle({Name="تفحيط 🔥",Default=false,Callback=function(v)
 	end
 end})
 
-T:AddToggle({Name="ترفيع 🔥",Default=false,Callback=function(v)lift=v end})
+T:AddToggle({Name="ترفيع 🔥",Default=false,Callback=function(v) lift=v end})
 
-RS.RenderStepped:Connect(function()
+RS.RenderStepped:Connect(function(dt)
 	local car,seat=GetCar()
 	if not car or not seat then return end
 	if not car.PrimaryPart then car.PrimaryPart=seat end
 	local root=car.PrimaryPart
 	local gyro=SetupGyro(root)
-	
-	-- التحكم بالدواسات
-	local moveDirection=Vector3.new(0,0,0)
+
+	local moveDirection=Vector3.new()
 	local camera=workspace.CurrentCamera
-	
+
 	if UIS:IsKeyDown(Enum.KeyCode.W) then
-		moveDirection=moveDirection+camera.CFrame.LookVector
-		currentSpeed=math.min(currentSpeed+2,maxSpeed)
+		targetSpeed = maxSpeed
 	elseif UIS:IsKeyDown(Enum.KeyCode.S) then
-		moveDirection=moveDirection-camera.CFrame.LookVector
-		currentSpeed=math.max(currentSpeed-2,-maxSpeed*0.5)
+		targetSpeed = -maxSpeed*0.4
 	else
-		currentSpeed=currentSpeed*0.9
+		targetSpeed = 0
 	end
-	
+	currentSpeed = Lerp(currentSpeed, targetSpeed, (targetSpeed==0 and deccel or accel)*dt)
+	if math.abs(currentSpeed) < 0.1 then currentSpeed = 0 end
+
 	if UIS:IsKeyDown(Enum.KeyCode.A) then
-		moveDirection=moveDirection-camera.CFrame.RightVector
+		moveDirection = moveDirection - camera.CFrame.RightVector
 	end
 	if UIS:IsKeyDown(Enum.KeyCode.D) then
-		moveDirection=moveDirection+camera.CFrame.RightVector
+		moveDirection = moveDirection + camera.CFrame.RightVector
 	end
-	
-	-- حساب الزاوية
-	local target=lift and -55 or 0
-	roll=roll+((target-roll)*0.05)
-	
-	-- تحديث اتجاه السيارة
-	if moveDirection.Magnitude>0 then
-		moveDirection=moveDirection.Unit
-		local newCFrame=CFrame.new(root.Position,root.Position+moveDirection)
-		gyro.CFrame=newCFrame*CFrame.Angles(0,0,math.rad(roll))
+	moveDirection = (moveDirection + camera.CFrame.LookVector).Unit
+
+	local target = lift and -55 or 0
+	roll = roll + ((target - roll) * 0.05)
+
+	if moveDirection.Magnitude > 0.1 then
+		local newCFrame = CFrame.new(root.Position, root.Position + moveDirection)
+		gyro.CFrame = newCFrame * CFrame.Angles(0, 0, math.rad(roll))
 	else
-		gyro.CFrame=CFrame.new(root.Position)*CFrame.Angles(0,math.rad(root.Orientation.Y),math.rad(roll))
+		gyro.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, math.rad(root.Orientation.Y), math.rad(roll))
 	end
-	
-	-- تحريك السيارة
-	seat.AssemblyLinearVelocity=moveDirection*currentSpeed
-	seat.AssemblyAngularVelocity=Vector3.new(0,0,0)
+
+	seat.AssemblyLinearVelocity = moveDirection * currentSpeed
+	seat.AssemblyAngularVelocity = Vector3.new(0,0,0)
 end)
 
 O:Init()
